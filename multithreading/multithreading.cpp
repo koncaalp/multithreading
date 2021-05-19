@@ -14,6 +14,7 @@ mutex queue;
 mutex output;
 
 int ID = 1;
+int totalitem, fcounter1, fcounter2, pcounter1, pcounter2;
 
 int random_range(const int& min, const int& max)
 {
@@ -24,19 +25,36 @@ int random_range(const int& min, const int& max)
 
 void produce(int min, int max)
 {
-    int duration = random_range(min, max);
-    this_thread::sleep_for(chrono::seconds(duration));
-    queue.lock();
-    filling.enqueue(ID);
-    queue.unlock();
-    time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
-    struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
-    localtime_s(ptm, &tt);  //converting the time structures
-    output.lock();
-    cout << "Producer has enqueued a new box " << ID << " to filling queue (filling queue size is " << filling.getCurrentSize() << "): " << put_time(ptm, "%X") <<endl;
+    while (ID <= totalitem)
+    {
+        int duration = random_range(min, max);
+        this_thread::sleep_for(chrono::seconds(duration));
+        queue.lock();
+        filling.enqueue(ID);
+        queue.unlock();
+        time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
+        struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
+        localtime_s(ptm, &tt);  //converting the time structures
+        output.lock();
+        cout << "Producer has enqueued a new box " << ID << " to filling queue (filling queue size is " << filling.getCurrentSize() << "): " << put_time(ptm, "%X") << endl;
+        output.unlock();
+    }
 }
 
-int totalitem;
+void filler(int min, int max, int worker)
+{
+    while (fcounter1 + fcounter2 <= totalitem)
+    {
+        if (!filling.isEmpty())
+        {
+            int duration = random_range(min, max);
+            this_thread::sleep_for(chrono::seconds(duration));
+            queue.lock();
+
+        }
+    }
+}
+
 int main()
 {
     time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
@@ -45,7 +63,6 @@ int main()
     //above two lines may not work for xcode. instead you can replace these two lines with    struct tm *ptm = localtime(&tt);
     cout << "Time is now " << put_time(ptm, "%X") << endl;  //displaying the time  
     int minpro, maxpro, minfil, maxfil, minpac, maxpac;
-    produce(3, 3);
     cout << "Please enter the total number of items: ";
     cin >> totalitem;
     cout << "Please enter the min-max waiting time range of producer: " << endl;;
