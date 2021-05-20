@@ -15,7 +15,7 @@ mutex pqueue;
 mutex output;
 
 int ID = 1;
-int totalitem = 2, fcounter1 = 1, fcounter2 = 1, pcounter1 = 1, pcounter2 = 1;
+int totalitem = 6, fcounter1 = 1, fcounter2 = 1, pcounter1 = 1, pcounter2 = 1;
 
 int random_range(const int& min, const int& max)
 {
@@ -52,7 +52,7 @@ void filler(int min, int max, int worker)
     while (fcounter1 + fcounter2 <= totalitem+1)
     {
         fqueue.lock();
-        if (!filling.isEmpty())
+        if (!filling.isEmpty() && fcounter1 + fcounter2 <= totalitem + 1)
         {
             filling.dequeue(boxid);
             int fillingsize = filling.getCurrentSize();
@@ -75,11 +75,15 @@ void filler(int min, int max, int worker)
             this_thread::sleep_for(chrono::seconds(duration));
             pqueue.lock();
             packing.enqueue(boxid);
+            int packagingsize = packing.getCurrentSize();
             pqueue.unlock();
             tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
             localtime_s(ptm, &tt);  //converting the time structures
             output.lock();
             cout << "Filler " << worker << " finished filling the box " << boxid  << ": " << put_time(ptm, "%X") << endl;
+            output.unlock();
+            output.lock();
+            cout << "Filler " << worker << " put box " << boxid << " into packaging queue (packaging queue size is " << packagingsize << " :"  << put_time(ptm, "%X") << endl;
             output.unlock();
         }
         else
@@ -96,7 +100,7 @@ void packager(int min, int max, int worker)
     while (pcounter1 + pcounter2 <= totalitem+1)
     {
         pqueue.lock();
-        if (!packing.isEmpty())
+        if (!packing.isEmpty() && pcounter1 + pcounter2 <= totalitem + 1)
         {
             packing.dequeue(boxid);
             int packagingsize = packing.getCurrentSize();
@@ -118,7 +122,7 @@ void packager(int min, int max, int worker)
             output.unlock();
             this_thread::sleep_for(chrono::seconds(duration));
             tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
-            localtime_s(ptm, &tt);  //converting the time structures
+            localtime_s(ptm, &tt);  //converting the time structures 
             output.lock();
             cout << "Packager " << worker << " finished packaging the box " << boxid << ": " << put_time(ptm, "%X") << endl;
             output.unlock();
@@ -169,6 +173,9 @@ int main()
     t3.join();
     t4.join();
     t5.join();
+    tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
+    localtime_s(ptm, &tt);  //converting the time structures
+    cout << "End of the simulation ends: " << put_time(ptm, "%X") << endl;
     return 0;
 }
 
