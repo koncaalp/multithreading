@@ -15,7 +15,7 @@ mutex pqueue;
 mutex output;
 
 int ID = 1;
-int totalitem = 6, fcounter1 = 1, fcounter2 = 1, pcounter1 = 1, pcounter2 = 1;
+int totalitem, fcounter1 = 1, fcounter2 = 1, pcounter1 = 1, pcounter2 = 1;
 
 int random_range(const int& min, const int& max)
 {
@@ -136,19 +136,7 @@ void packager(int min, int max, int worker)
 
 int main()
 {
-    time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
-    struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
-    localtime_s(ptm, &tt);  //converting the time structures
-    //above two lines may not work for xcode. instead you can replace these two lines with    struct tm *ptm = localtime(&tt);
-    cout << "Time is now " << put_time(ptm, "%X") << endl;  //displaying the time  
-    thread t1(&produce, 1,1);
-    thread t2(&filler,1,1, 1);
-    thread t3(&filler,1,1, 2);
-    thread t4(&packager,1,1, 1);
-    thread t5(&packager,1,1, 2);
 
-
-    /*cout << packing.getCurrentSize();
     int minpro, maxpro, minfil, maxfil, minpac, maxpac;
     cout << "Please enter the total number of items: ";
     cin >> totalitem;
@@ -167,7 +155,19 @@ int main()
     cin >> minpac;
     cout << "Max: ";
     cin >> maxpac;
-    */
+    
+    time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
+    struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
+    localtime_s(ptm, &tt);  //converting the time structures
+    //above two lines may not work for xcode. instead you can replace these two lines with    struct tm *ptm = localtime(&tt);
+
+    cout << "Time is now " << put_time(ptm, "%X") << endl;  //displaying the time  
+    thread t1(&produce, minpro, maxpro);
+    thread t2(&filler, minfil, maxfil, 1);
+    thread t3(&filler, minfil, maxfil, 2);
+    thread t4(&packager, minpac, maxpac, 1);
+    thread t5(&packager, minpac, maxpac, 2);
+
     t1.join();
     t2.join();
     t3.join();
@@ -176,6 +176,7 @@ int main()
     tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
     localtime_s(ptm, &tt);  //converting the time structures
     cout << "End of the simulation ends: " << put_time(ptm, "%X") << endl;
+
     return 0;
 }
 
