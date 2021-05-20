@@ -10,7 +10,8 @@
 using namespace std;
 HW7DynIntQueue filling;
 HW7DynIntQueue packing;
-mutex queue;
+mutex fqueue;
+mutex pqueue;
 mutex output;
 
 int ID = 1;
@@ -29,34 +30,38 @@ void produce(int min, int max)
     {
         int duration = random_range(min, max);
         this_thread::sleep_for(chrono::seconds(duration));
-        queue.lock();
+        fqueue.lock();
         filling.enqueue(ID);
         ID++;
-        queue.unlock();
+        int fillingsize = filling.getCurrentSize();
+        fqueue.unlock();
         time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
         struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
         localtime_s(ptm, &tt);  //converting the time structures
         output.lock();
-        cout << "Producer has enqueued a new box " << ID-1 << " to filling queue (filling queue size is " << filling.getCurrentSize() << "): " << put_time(ptm, "%X") << endl;
+        cout << "Producer has enqueued a new box " << ID-1 << " to filling queue (filling queue size is " << fillingsize << "): " << put_time(ptm, "%X") << endl;
         output.unlock();
     }
 }
 
 void filler(int min, int max, int worker)
 {
+
     int boxid;
+    
     while (fcounter1 + fcounter2 <= totalitem+1)
     {
+        fqueue.lock();
         if (!filling.isEmpty())
         {
+            filling.dequeue(boxid);
+            int fillingsize = filling.getCurrentSize();
             time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
             struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
             localtime_s(ptm, &tt);  //converting the time structures
-            int duration = random_range(min, max);
-            queue.lock();
-            filling.dequeue(boxid);
-            packing.enqueue(boxid);
-            queue.unlock();
+            output.lock();
+            cout << "Filler " << worker << " started filling the box " << boxid << " (filling queue size is " << fillingsize << "): " << put_time(ptm, "%X") << endl;
+            output.unlock();
             if (worker == 1)
             {
                 fcounter1++;
@@ -65,14 +70,21 @@ void filler(int min, int max, int worker)
             {
                 fcounter2++;
             }
-            output.lock();
-            cout << "Filler " << worker << " started filling the box " << boxid << " (filling queue size is " << filling.getCurrentSize() << "): " << put_time(ptm, "%X") << endl;
-            output.unlock();
+            fqueue.unlock();
+            int duration = random_range(min, max);
             this_thread::sleep_for(chrono::seconds(duration));
-            ptm->tm_sec++;
+            pqueue.lock();
+            packing.enqueue(boxid);
+            pqueue.unlock();
+            tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
+            localtime_s(ptm, &tt);  //converting the time structures
             output.lock();
             cout << "Filler " << worker << " finished filling the box " << boxid  << ": " << put_time(ptm, "%X") << endl;
             output.unlock();
+        }
+        else
+        {
+            fqueue.unlock();
         }
     }
 }
@@ -83,15 +95,11 @@ void packager(int min, int max, int worker)
     int boxid;
     while (pcounter1 + pcounter2 <= totalitem+1)
     {
+        pqueue.lock();
         if (!packing.isEmpty())
         {
-            time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
-            struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
-            localtime_s(ptm, &tt);  //converting the time structures
-            int duration = random_range(min, max);
-            queue.lock();
             packing.dequeue(boxid);
-            queue.unlock();
+            int packagingsize = packing.getCurrentSize();
             if (worker == 1)
             {
                 pcounter1++;
@@ -100,14 +108,24 @@ void packager(int min, int max, int worker)
             {
                 pcounter2++;
             }
+            pqueue.unlock();
+            time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
+            struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
+            localtime_s(ptm, &tt);  //converting the time structures
+            int duration = random_range(min, max);
             output.lock();
-            cout << "Packager " << worker << " started packaging the box " << boxid << " (packaging queue size is " << packing.getCurrentSize() << "): " << put_time(ptm, "%X") << endl;
+            cout << "Packager " << worker << " started packaging the box " << boxid << " (packaging queue size is " << packagingsize << "): " << put_time(ptm, "%X") << endl;
             output.unlock();
             this_thread::sleep_for(chrono::seconds(duration));
-            ptm->tm_sec++;
+            tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
+            localtime_s(ptm, &tt);  //converting the time structures
             output.lock();
             cout << "Packager " << worker << " finished packaging the box " << boxid << ": " << put_time(ptm, "%X") << endl;
             output.unlock();
+        }
+        else
+        {
+            pqueue.unlock();
         }
     }
 }
@@ -119,14 +137,14 @@ int main()
     localtime_s(ptm, &tt);  //converting the time structures
     //above two lines may not work for xcode. instead you can replace these two lines with    struct tm *ptm = localtime(&tt);
     cout << "Time is now " << put_time(ptm, "%X") << endl;  //displaying the time  
-    produce(1, 1);
-    produce(1, 1);
-    filler(1, 1, 1);
-    //filler(1, 1, 2);
-    packager(1, 1, 1);
-    //packager(1, 1, 2);
+    thread t1(&produce, 1,1);
+    thread t2(&filler,1,1, 1);
+    thread t3(&filler,1,1, 2);
+    thread t4(&packager,1,1, 1);
+    thread t5(&packager,1,1, 2);
 
-    cout << packing.getCurrentSize();
+
+    /*cout << packing.getCurrentSize();
     int minpro, maxpro, minfil, maxfil, minpac, maxpac;
     cout << "Please enter the total number of items: ";
     cin >> totalitem;
@@ -145,6 +163,12 @@ int main()
     cin >> minpac;
     cout << "Max: ";
     cin >> maxpac;
-    
+    */
+    t1.join();
+    t2.join();
+    t3.join();
+    t4.join();
+    t5.join();
+    return 0;
 }
 
