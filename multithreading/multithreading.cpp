@@ -14,10 +14,10 @@ mutex fqueue;
 mutex pqueue;
 mutex output;
 
-int ID = 1;
+int ID = 1; //global variables
 int totalitem, fcounter1 = 1, fcounter2 = 1, pcounter1 = 1, pcounter2 = 1;
 
-int random_range(const int& min, const int& max)
+int random_range(const int& min, const int& max) //thread safe random number generator
 {
     static mt19937 generator(time(0));
     uniform_int_distribution<int> distribution(min, max);
@@ -26,21 +26,23 @@ int random_range(const int& min, const int& max)
 
 void produce(int min, int max)
 {
-    while (ID <= totalitem)
+    while (ID <= totalitem) //if the produced boxes are less than demand, produce one
     {
         int duration = random_range(min, max);
-        this_thread::sleep_for(chrono::seconds(duration));
-        fqueue.lock();
-        filling.enqueue(ID);
-        ID++;
-        int fillingsize = filling.getCurrentSize();
-        fqueue.unlock();
+        this_thread::sleep_for(chrono::seconds(duration)); //sleep for a random amount of time between given min and max values
+        fqueue.lock(); //lock the mutex for filling queue
+        filling.enqueue(ID); //enqueue
+        ID++; //increment the ID
+        int fillingsize = filling.getCurrentSize(); //get the size of queue now so it wont change uncontrollably
+        fqueue.unlock(); //unlock the mutex
+        //starting, code from the lecture examples
         time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
         struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
         localtime_s(ptm, &tt);  //converting the time structures
-        output.lock();
+        //ending, code from the lecture examples
+        output.lock(); //cout mutex lock and cout the message
         cout << "Producer has enqueued a new box " << ID-1 << " to filling queue (filling queue size is " << fillingsize << "): " << put_time(ptm, "%X") << endl;
-        output.unlock();
+        output.unlock(); //unlock
     }
 }
 
@@ -49,20 +51,19 @@ void filler(int min, int max, int worker)
 
     int boxid;
     
-    while (fcounter1 + fcounter2 <= totalitem+1)
+    while (fcounter1 + fcounter2 <= totalitem+1) //until the total number of boxes filled is the total demand, fill
     {
-        fqueue.lock();
-        if (!filling.isEmpty() && fcounter1 + fcounter2 <= totalitem + 1)
+        fqueue.lock(); //lock the mutex for filling
+        if (!filling.isEmpty() && fcounter1 + fcounter2 <= totalitem + 1) //check if any other thread change the trueness value of that bool
         {
-            filling.dequeue(boxid);
+            filling.dequeue(boxid); //dequeu and get size as the producing one
+            //starting, code from lecture examples
             int fillingsize = filling.getCurrentSize();
             time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
             struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
             localtime_s(ptm, &tt);  //converting the time structures
-            output.lock();
-            cout << "Filler " << worker << " started filling the box " << boxid << " (filling queue size is " << fillingsize << "): " << put_time(ptm, "%X") << endl;
-            output.unlock();
-            if (worker == 1)
+            //end of the sample code
+            if (worker == 1) //increment the counters according to the worker number, before unlocking since we dont want any other thread to start the process before checking incremented values
             {
                 fcounter1++;
             }
@@ -71,22 +72,28 @@ void filler(int min, int max, int worker)
                 fcounter2++;
             }
             fqueue.unlock();
-            int duration = random_range(min, max);
+
+            output.lock(); //cout mutex lock to print out the started filling message
+            cout << "Filler " << worker << " started filling the box " << boxid << " (filling queue size is " << fillingsize << "): " << put_time(ptm, "%X") << endl;
+            output.unlock(); //unlock cout mutex
+            int duration = random_range(min, max); //get a random value between min and max and sleep for that much
             this_thread::sleep_for(chrono::seconds(duration));
-            pqueue.lock();
-            packing.enqueue(boxid);
-            int packagingsize = packing.getCurrentSize();
-            pqueue.unlock();
-            tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
+            
+            tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time for the second time
             localtime_s(ptm, &tt);  //converting the time structures
-            output.lock();
+            output.lock(); //cout lock to print finished filling the box
             cout << "Filler " << worker << " finished filling the box " << boxid  << ": " << put_time(ptm, "%X") << endl;
-            output.unlock();
-            output.lock();
+            output.unlock(); //unlock
+
+            pqueue.lock(); //lock the packaging queue to enqueue new box
+            packing.enqueue(boxid); //enqueue and get the size after
+            int packagingsize = packing.getCurrentSize();
+            pqueue.unlock(); //unlock the mutex
+            output.lock(); //lock cout mutex and print the message
             cout << "Filler " << worker << " put box " << boxid << " into packaging queue (packaging queue size is " << packagingsize << " :"  << put_time(ptm, "%X") << endl;
-            output.unlock();
+            output.unlock(); //unlock
         }
-        else
+        else //to prevent mutex from staying locked if the case in if statement is false
         {
             fqueue.unlock();
         }
@@ -97,14 +104,14 @@ void filler(int min, int max, int worker)
 void packager(int min, int max, int worker)
 {
     int boxid;
-    while (pcounter1 + pcounter2 <= totalitem+1)
+    while (pcounter1 + pcounter2 <= totalitem+1) //until the total number of boxes packaged is the total demand, package
     {
-        pqueue.lock();
-        if (!packing.isEmpty() && pcounter1 + pcounter2 <= totalitem + 1)
+        pqueue.lock(); //lock the mutex for packaging
+        if (!packing.isEmpty() && pcounter1 + pcounter2 <= totalitem + 1) //check if any other thread change the trueness value of that bool
         {
-            packing.dequeue(boxid);
-            int packagingsize = packing.getCurrentSize();
-            if (worker == 1)
+            packing.dequeue(boxid); //take the box out of packaging queue
+            int packagingsize = packing.getCurrentSize(); //get size in the mutex to prevent it from changing afterwards
+            if (worker == 1) //increment the count of packaged box according to the workers
             {
                 pcounter1++;
             }
@@ -112,22 +119,24 @@ void packager(int min, int max, int worker)
             {
                 pcounter2++;
             }
-            pqueue.unlock();
+            pqueue.unlock(); //unlock packaging queue
+            //start, example from the lecture sample
             time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
             struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
             localtime_s(ptm, &tt);  //converting the time structures
-            int duration = random_range(min, max);
-            output.lock();
+            //end for the sample code
+            int duration = random_range(min, max); //create a random value between min and max
+            output.lock(); //lock output to cout the message
             cout << "Packager " << worker << " started packaging the box " << boxid << " (packaging queue size is " << packagingsize << "): " << put_time(ptm, "%X") << endl;
-            output.unlock();
-            this_thread::sleep_for(chrono::seconds(duration));
-            tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
+            output.unlock(); //unlock cout
+            this_thread::sleep_for(chrono::seconds(duration)); //sleep for random amount of time
+            tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time, get the new time
             localtime_s(ptm, &tt);  //converting the time structures 
-            output.lock();
+            output.lock();//lock the output and print the time after waiting time elapsed
             cout << "Packager " << worker << " finished packaging the box " << boxid << ": " << put_time(ptm, "%X") << endl;
-            output.unlock();
+            output.unlock(); //unlock cout
         }
-        else
+        else //so that pqueue wont be locked if the if statement returns false
         {
             pqueue.unlock();
         }
@@ -156,24 +165,26 @@ int main()
     cout << "Max: ";
     cin >> maxpac;
     
+    //start, example from the lecture samples
     time_t tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
     struct tm* ptm = new struct tm;  //creating the time struct to be used in thread
     localtime_s(ptm, &tt);  //converting the time structures
-    //above two lines may not work for xcode. instead you can replace these two lines with    struct tm *ptm = localtime(&tt);
+    
+    //end
 
     cout << "Time is now " << put_time(ptm, "%X") << endl;  //displaying the time  
-    thread t1(&produce, minpro, maxpro);
+    thread t1(&produce, minpro, maxpro);//start the threads
     thread t2(&filler, minfil, maxfil, 1);
     thread t3(&filler, minfil, maxfil, 2);
     thread t4(&packager, minpac, maxpac, 1);
     thread t5(&packager, minpac, maxpac, 2);
 
-    t1.join();
+    t1.join(); //make sure every thread finishes before the termiantion of the program
     t2.join();
     t3.join();
     t4.join();
     t5.join();
-    tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time
+    tt = chrono::system_clock::to_time_t(chrono::system_clock::now());  //gets the current time to print the end time
     localtime_s(ptm, &tt);  //converting the time structures
     cout << "End of the simulation ends: " << put_time(ptm, "%X") << endl;
 
